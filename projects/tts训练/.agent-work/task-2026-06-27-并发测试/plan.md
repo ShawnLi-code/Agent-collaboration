@@ -2,77 +2,108 @@
 
 ## Current Accepted Plan
 
-1. Codex defines the task contract, acceptance criteria, and review checklist in this Markdown task package.
-2. Claude Code implements the cloud inference API in the real cloud-server TTS project, not in this repository.
-3. Claude Code records implementation details in `claude-review.md` or a new task note section: changed files, endpoint, port, command, request example, response format, safety setting, and test result summary.
-4. Claude Code provides enough code context for review: sanitized diff, key functions, config snippets, and error-handling behavior. Do not paste secrets or large files.
-5. Codex reviews the implementation from the provided diff/context and records findings in `codex-notes.md`.
-6. Claude Code fixes review issues in the real project and records follow-up.
-7. Final result, endpoint status, and remaining risks are recorded in `done.md`.
+1. Claude Code owns the cloud TTS API implementation in the real cloud-server TTS project.
+2. Codex owns local pressure testing against the exposed cloud endpoint and saves raw result files locally only.
+3. Trae owns integrating the exposed cloud TTS endpoint into the local voice-companion chat web app.
+4. This Git repository stores coordination Markdown only. It must not store real code, weights, datasets, generated audio, large logs, or raw pressure-test artifacts.
+5. Final status and cross-agent handoff notes are recorded in this task package.
 
 ## Claude Code Assignment
 
-Claude Code owns implementation on the cloud server.
+Claude Code owns the cloud endpoint.
 
-Required implementation behavior:
+Known endpoint from Claude Code:
 
-- Load the round-53 TTS weight.
-- Use inference parameters `scale=1.5` and `seed=9999`.
-- Expose a text-to-audio endpoint reachable from local computers.
-- Accept text input only for v1.
-- Return generated audio as either a downloadable file response or a documented JSON response containing a safe audio URL/path.
-- Include input validation: reject empty text and oversized text.
-- Avoid logging full user text if it may contain private content.
-- Bind service intentionally: document whether it binds `127.0.0.1`, `0.0.0.0`, or reverse proxy.
-- Document cloud firewall/security-group changes needed for local access.
-- Add a health check endpoint if feasible.
+```text
+Base URL: https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443
+Health:   GET  /health
+TTS:      POST /synthesize
+Docs:     GET  /docs
+```
 
-Claude Code must record:
+Known model settings:
 
-- External project path or safe alias.
-- Changed files.
-- Startup command.
-- Port.
-- Request example.
-- Response example.
-- Weight path alias, not the actual weight file copied here.
-- Test results for at least one successful local or remote call.
-- Any unresolved blocker.
+- Weight: round 53.
+- Model preset reported by health check: `epoch53_scale1.5_seed9999`.
+- Default inference parameters: `scale=1.5`, `seed=9999`.
+- Successful synthesis response: `audio/wav`.
+
+Claude Code should continue to own server-side fixes if pressure tests expose proxy, concurrency, timeout, cleanup, or stability problems.
 
 ## Codex Assignment
 
-Codex owns review and coordination in this repository.
+Codex owns local pressure testing.
 
-Review focus:
+Required behavior:
 
-- Does the service always use round-53 weight and `scale=1.5`, `seed=9999`?
-- Can local machines reach the cloud endpoint without exposing unnecessary services?
-- Are request and response formats stable and documented?
-- Are empty, too-long, or malformed text inputs handled?
-- Is generated audio written to a safe location with cleanup strategy?
-- Are secrets, absolute sensitive paths, datasets, weights, and large logs kept out of this repository?
-- Is there enough verification evidence to trust the endpoint works?
+- Call the cloud endpoint from the local machine.
+- Save raw test artifacts locally outside this Git repository.
+- Do not commit generated WAV files, CSVs, JSON summaries, or raw logs.
+- Record only short coordination summaries in Git if needed.
 
-## Suggested API Contract
-
-Claude Code may adjust this if the real project already has conventions, but must document the final contract.
+Local result location used by Codex:
 
 ```text
-GET /health
-Response: {"status":"ok"}
-
-POST /tts
-Request JSON: {"text":"要合成的文本"}
-Response option A: audio/wav or audio/mpeg binary
-Response option B: {"audio_url":"...", "duration_seconds": 0.0}
+E:\Shawn_code\Agent-collaboration-results\tts-concurrency-test\
 ```
+
+Required local artifacts:
+
+- `pressure_report.md`
+- `pressure_results.csv`
+- `pressure_summary.json`
+- `audio/*.wav`
+
+## Trae Assignment
+
+Trae owns client integration into the local voice-companion chat web app.
+
+Trae should:
+
+- Read this task package before editing its local web app.
+- Add the cloud TTS endpoint as the app's TTS provider.
+- Send chat reply text to `POST /synthesize`.
+- Play the returned `audio/wav` in the browser.
+- Add loading, timeout, retry-once, and error UI for TTS generation.
+- Avoid concurrent duplicate TTS calls for the same message.
+- Keep the endpoint configurable through environment/config rather than hardcoding it deeply in UI components.
+- Do not upload the local web app code into this collaboration repository unless the human owner explicitly asks.
+
+Suggested request:
+
+```http
+POST https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443/synthesize
+Content-Type: application/json
+
+{"text":"要合成的文本"}
+```
+
+Expected successful response:
+
+```text
+Content-Type: audio/wav
+Body: WAV binary
+```
+
+## Current Codex Pressure-Test Finding
+
+Codex confirmed:
+
+- `/health` is reachable from local machine.
+- `/health` reports `epoch53_scale1.5_seed9999`.
+- Single synthesis request succeeds and returns WAV.
+- Light concurrency shows instability: some `IncompleteRead` failures and one nginx `502 Bad Gateway`.
+
+Recommendation for Trae:
+
+- Integrate as a single-user / low-frequency TTS provider first.
+- Add visible error handling and retry-once behavior.
+- Do not assume the endpoint is stable for overlapping multi-message playback yet.
 
 ## Verification
 
-- Cloud service starts without errors.
-- `/health` returns success if implemented.
-- `/tts` with a short Chinese text returns playable audio.
-- At least one local computer outside the server successfully calls the cloud endpoint.
-- Claude Code records command/output summary in Markdown.
-- Codex review has no blocking findings, or accepted risks are recorded in `decisions.md`.
+- Claude Code: server endpoint remains reachable.
+- Codex: local pressure-test files exist outside Git.
+- Trae: local web app can request TTS and play returned WAV.
+- Git status remains free of raw audio, logs, pressure-test CSV/JSON, model files, or app source code unless explicitly requested.
 

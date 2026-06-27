@@ -2,25 +2,37 @@
 
 ## Result
 
-- Pending Claude Code implementation and Codex review.
+- Claude Code exposed the cloud TTS endpoint.
+- Codex completed a light local pressure test and saved raw artifacts locally outside Git.
+- Trae integration is pending.
 
 ## Success Criteria Check
 
-- [ ] Claude Code implemented cloud TTS endpoint.
-- [ ] Endpoint uses round-53 weight.
-- [ ] Endpoint uses `scale=1.5` and `seed=9999`.
-- [ ] Local machine can call cloud endpoint.
-- [ ] Claude Code recorded implementation summary.
-- [ ] Codex completed code review.
-- [ ] Remaining risks documented.
+- [x] Cloud endpoint is documented.
+- [x] Endpoint reports `epoch53_scale1.5_seed9999`.
+- [x] Single local synthesis call returns WAV.
+- [x] Codex local pressure-test report exists outside Git.
+- [ ] Trae integrates endpoint into local voice-companion chat web app.
+- [ ] Trae records local integration summary.
+- [ ] Remaining server-side concurrency risks are accepted or fixed.
 
-## Verification Evidence
+## Local Verification Evidence
 
-- Pending.
+Local-only artifact directory:
+
+```text
+E:\Shawn_code\Agent-collaboration-results\tts-concurrency-test\
+```
+
+Key files:
+
+- `pressure_report.md`
+- `pressure_results.csv`
+- `pressure_summary.json`
+- `audio/*.wav`
 
 ## Remaining Work
 
-- Claude Code implements the service in the real cloud TTS project.
-- Claude Code updates `claude-review.md` with implementation report.
-- Codex reviews the reported code/diff and updates `codex-notes.md`.
+- Ask Trae to integrate the endpoint into the local web app.
+- If the app needs overlapping TTS calls, ask Claude Code to harden server concurrency first.
 
