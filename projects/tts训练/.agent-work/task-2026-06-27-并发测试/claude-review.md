@@ -9,6 +9,7 @@
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | `kokoro-deutsch/StyleTTS2/api_tts.py` | 修改（添加 6 行） | 添加 `/health` 端点 |
+| `/etc/nginx/sites-available/tts-api` | 新增 | nginx 反向代理配置（6006 → 8123） |
 
 ## 关键代码变更
 
@@ -64,11 +65,25 @@ PRESET = {
 ## 启动命令
 
 ```bash
+# 1. 启动 TTS API（监听 8123）
 cd /root/autodl-tmp/kokoro-deutsch/StyleTTS2
 nohup python api_tts.py > /tmp/tts_api.log 2>&1 &
+
+# 2. 启动 nginx 反向代理（6006 → 8123）
+nginx -t && nginx
 ```
 
-服务运行在 **端口 8123**，绑定 `0.0.0.0`。
+服务架构：
+
+```
+公网用户 → https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443
+              ↓（AutoDL frp 映射）
+            容器内 6006 端口
+              ↓（nginx 反向代理）
+            容器内 8123 端口（TTS API / Uvicorn）
+              ↓
+            epoch53 模型推理（CUDA）
+```
 
 ## 防火墙 / 安全组设置
 
@@ -78,35 +93,85 @@ nohup python api_tts.py > /tmp/tts_api.log 2>&1 &
 
 - 内网 IP: `172.17.0.3`
 - 容器 UUID: `60034c9a8d-5d91dc27`
-- 公网入口: `https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443`
+- **该实例仅开放 6006 和 6008 两个端口**供公网映射
 
-**开放端口的两种方式：**
+### nginx 反向代理配置
 
-**方式 A — AutoDL 网页控制台（推荐）：**
-1. 登录 [AutoDL 控制台](https://www.autodl.com)
-2. 进入"容器实例" → 选择当前实例
-3. 点击"自定义服务" → 添加：
-   - 服务名称：`tts-api`
-   - 端口：`8123`
-4. 保存后即可通过公网 URL 访问
+由于 AutoDL 只映射端口 6006 和 6008，已配置 nginx 将 **6006 端口** 反向代理到 TTS API（8123 端口）：
 
-**方式 B — SSH 隧道（临时调试用）：**
+```nginx
+server {
+    listen 6006;
+    server_name _;
+
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    location / {
+        proxy_pass http://127.0.0.1:8123;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        client_max_body_size 10m;
+    }
+}
+```
+
+### 公网访问地址
+
+TTS API 可通过以下公网地址访问：
+
+**https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443**
+
+（该地址映射容器内 6006 端口 → nginx → 8123 TTS API）
+
+### 本地调试地址
+
 ```bash
-ssh -L 8123:localhost:8123 root@116.172.96.170 -p <ssh_port>
+# 服务器本地测试（不走代理）
+curl http://127.0.0.1:8123/health
+
+# 通过 nginx 代理测试
+curl http://127.0.0.1:6006/health
+
+# 通过公网访问（需 AutoDL 映射生效）
+curl https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443/health
 ```
 
 ### 安全边界说明
 
 - 当前无认证/鉴权机制（v1 范围外）
-- 建议：仅在 AutoDL 自定义服务中暴露，利用平台内置的访问控制
-- 建议：如有公网直接暴露需求，应在前置加 nginx 反向代理 + 基础认证
+- 利用 AutoDL 平台自带的端口映射作为基本访问控制
+- 建议生产部署时在前置加 nginx 基础认证或 API Key
 
 ## 请求示例
 
-### POST（程序调用推荐）
+### 服务器本地调用
 
 ```bash
-curl -X POST http://localhost:8123/synthesize \
+# 直接调用 TTS API（端口 8123）
+curl -X POST http://127.0.0.1:8123/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"您好，欢迎致电客服中心。"}' \
+  -o output.wav
+
+# 通过 nginx 代理（端口 6006，等效）
+curl -X POST http://127.0.0.1:6006/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"您好，欢迎致电客服中心。"}' \
+  -o output.wav
+```
+
+### 本地电脑远程调用（通过公网）
+
+```bash
+curl -X POST "https://u539523-9a8d-5d91dc27.westx.seetacloud.com:8443/synthesize" \
   -H "Content-Type: application/json" \
   -d '{"text":"您好，欢迎致电客服中心。"}' \
   -o output.wav
@@ -116,13 +181,13 @@ curl -X POST http://localhost:8123/synthesize \
 
 ```bash
 # 中文需 URL 编码
-curl -o output.wav "http://localhost:8123/synthesize?text=%E6%82%A8%E5%A5%BD%EF%BC%8C%E6%AC%A2%E8%BF%8E%E8%87%B4%E7%94%B5%E5%AE%A2%E6%9C%8D%E4%B8%AD%E5%BF%83%E3%80%82"
+curl -o output.wav "http://127.0.0.1:8123/synthesize?text=%E6%82%A8%E5%A5%BD%EF%BC%8C%E6%AC%A2%E8%BF%8E%E8%87%B4%E7%94%B5%E5%AE%A2%E6%9C%8D%E4%B8%AD%E5%BF%83%E3%80%82"
 ```
 
 ### 自定义参数
 
 ```bash
-curl -X POST http://localhost:8123/synthesize \
+curl -X POST http://127.0.0.1:8123/synthesize \
   -H "Content-Type: application/json" \
   -d '{"text":"测试自定义参数。","seed":1234,"embedding_scale":2.0}' \
   -o output.wav
@@ -144,6 +209,7 @@ curl -X POST http://localhost:8123/synthesize \
 |------|------|------|
 | `GET /health` | ✅ 200 | `{"status":"ok","device":"cuda","model":"epoch53_scale1.5_seed9999"}` |
 | `GET /preset` | ✅ 200 | 预设参数正确：scale=1.5, seed=9999, device=cuda |
+| `POST /synthesize` 通过 nginx 代理 (6006) | ✅ 200 | 2.93s 音频, 140KB, 代理正常工作 |
 | `POST /synthesize` 短文本 | ✅ 200 | 3.48s 音频, 166KB, 24000Hz mono PCM16 |
 | `GET /synthesize` URL编码中文 | ✅ 200 | 2.72s 音频, 130KB |
 | `POST /synthesize` 自定义参数 | ✅ 200 | 2.33s 音频, 111KB, seed=1234, scale=2.0 |
