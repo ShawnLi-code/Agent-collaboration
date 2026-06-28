@@ -1,75 +1,81 @@
 # Agent Collaboration
 
-这是一个让 Codex、Claude Code、Trae 和其他智能体围绕同一项目协作的 Git 仓库。
+多模型、多项目协作仓库。GPT 5.5、DeepSeek V4、Claude 4.8、千问 3.7 Max、智谱 GLM 5.2 通过文件交接协作，不依赖聊天上下文。
 
 核心原则：
 
-- 根目录保存全局协作规则，任何智能体进入仓库后先读根目录规则。
-- 每个真实项目放在 `projects/<project-slug>/` 下。
-- 每个项目的任务协作记录放在该项目自己的 `.agent-work/` 下。
-- Agent 之间不靠聊天记录交接，必须把目标、计划、审查、风险、决策和完成证据写入文件。
+- 所有 Agent 进入仓库后先读 `AGENTS.md`。
+- 每个项目放在 `projects/<project-slug>/`。
+- 每个任务的协作记录放在该项目的 `.agent-work/task-YYYY-MM-DD-<task-slug>/`。
+- Agent 之间通过文件交接，不靠聊天记录。
+
+## 模型分工
+
+| 模型 | 角色 | 主要职责 |
+|------|------|----------|
+| GPT 5.5 | Builder | 生成训练代码、config、数据预处理脚本 |
+| DeepSeek V4 | Validator | 校验超参数合理性（独立于 Claude） |
+| Claude 4.8 | Reviewer | 审查代码逻辑、写 risks.md（独立于 DeepSeek） |
+| 千问 3.7 Max | Memory | 持有训练日志、维护 experiments.md |
+| 智谱 GLM 5.2 | Docs | 整理项目文档、同步 GitHub |
+
+## 协作流程
+
+```
+Human 写 brief.md
+    ↓
+GPT 5.5 生成代码和 config
+    ↓
+DeepSeek V4 校验超参  ←── 独立并行 ──→  Claude 4.8 审查代码逻辑
+    ↓
+Human 对比两份意见，写入 decisions.md
+    ↓
+Smoke Test（过拟合 5 条样本，几分钟出结论）── 失败 → 回 GPT 5.5 修
+    ↓ 通过
+完整训练
+    ↓
+千问 3.7 Max 更新 experiments.md
+智谱 GLM 5.2 整理文档
+```
 
 ## 快速开始
 
-创建一个项目：
-
 ```powershell
-.\scripts\New-AgentProject.ps1 -ProjectName "my reading assistant"
+# 创建项目
+.\scripts\New-AgentProject.ps1 -ProjectName "my-project"
+
+# 创建任务包
+.\scripts\New-AgentTask.ps1 -Project "my-project" -TaskName "first task"
 ```
 
-创建一个项目任务：
-
-```powershell
-.\scripts\New-AgentTask.ps1 -Project "my-reading-assistant" -TaskName "first collaboration test"
-```
-
-然后让任意智能体按这个顺序读取：
+任意 Agent 接手时，读取顺序：
 
 1. `AGENTS.md`
-2. 自己对应的角色文件：`CLAUDE.md` 或 `TRAE.md`
-3. `projects/<project-slug>/PROJECT.md`
-4. `projects/<project-slug>/.agent-work/task-YYYY-MM-DD-<task-slug>/brief.md`
-5. `projects/<project-slug>/.agent-work/task-YYYY-MM-DD-<task-slug>/plan.md`
+2. `projects/<project-slug>/PROJECT.md`
+3. 任务包的 `brief.md` → `plan.md`
 
 ## 目录结构
 
 ```text
 .
-├── AGENTS.md
-├── CLAUDE.md
-├── TRAE.md
-├── docs/
-│   └── workflow.md
+├── AGENTS.md                  ← 所有 Agent 必读，含模型分工和协作规则
+├── docs/workflow.md
 ├── projects/
-│   ├── README.md
-│   └── _template/
+│   ├── _template/
+│   └── <project-slug>/
+│       ├── PROJECT.md
+│       └── .agent-work/
+│           └── task-YYYY-MM-DD-<slug>/
+│               ├── brief.md
+│               ├── plan.md
+│               ├── codex-notes.md
+│               ├── claude-review.md
+│               ├── risks.md
+│               ├── decisions.md
+│               ├── done.md
+│               └── experiments.md  ← 实验记录（千问维护）
 ├── scripts/
 │   ├── New-AgentProject.ps1
 │   └── New-AgentTask.ps1
-└── templates/
-    └── task-package/
+└── templates/task-package/
 ```
-
-## 推荐工作流
-
-1. 人类创建项目文件夹，并把项目资料放进去。
-2. 人类或 Codex 创建任务包。
-3. Codex 读取项目和任务包，写计划并执行。
-4. Claude Code 只做审查、风险和替代方案。
-5. Trae 可做工程实现、UI 集成、运行检查或补充审查，具体看任务包分配。
-6. 最终状态写入 `done.md`，不要只留在聊天窗口。
-
-## Git 分支建议
-
-每个任务可以使用这些分支：
-
-```text
-agent/<project-slug>/<task-slug>/main
-agent/<project-slug>/<task-slug>/codex
-agent/<project-slug>/<task-slug>/claude
-agent/<project-slug>/<task-slug>/trae
-agent/<project-slug>/<task-slug>/review
-```
-
-分支不是强制要求。小任务可以只用任务包文件协作；涉及代码改动、多人并行时再开分支或 worktree。
-
