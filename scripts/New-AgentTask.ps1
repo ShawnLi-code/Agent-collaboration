@@ -61,7 +61,8 @@ $files = @(
     "trae-notes.md",
     "risks.md",
     "decisions.md",
-    "done.md"
+    "done.md",
+    "experiments.md"
 )
 
 foreach ($file in $files) {
@@ -112,8 +113,7 @@ if ($CreateBranches) {
 Write-Host "Created task package: $taskDir"
 Write-Host "Agent start order:"
 Write-Host "  1. AGENTS.md"
-Write-Host "  2. Role file: CLAUDE.md or TRAE.md"
-Write-Host "  3. projects/$projectSlug/PROJECT.md"
+Write-Host "  2. projects/$projectSlug/PROJECT.md"
 Write-Host "  4. projects/$projectSlug/.agent-work/$taskDirName/brief.md"
 Write-Host "  5. projects/$projectSlug/.agent-work/$taskDirName/plan.md"
 
