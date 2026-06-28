@@ -16,8 +16,8 @@
 
 按以下顺序执行：
 
-1. **读取项目** — 先读 `AGENTS.md`，再读本项目 `PROJECT.md`
-2. **获取训练代码** — 从云算力平台读取当前训练脚本（路径由 Human 补充，见 Constraints）
+1. **读取项目规则** — 先读 `AGENTS.md`，再读本项目 `PROJECT.md`
+2. **获取训练代码** — 在当前云系统上搜索并读取训练脚本（搜索范围：用户目录、项目目录、home 下的常见工作目录）
 3. **检查超参数** — 重点检查：learning rate、batch size、warmup steps、total steps、scheduler 类型、loss 函数、音频预处理参数
 4. **写优化方案** — 写入 `plan.md`
 
@@ -33,16 +33,17 @@
 - 训练超参数检查
 - 数据预处理流水线合理性
 - Smoke Test 配置
-- 成本优化
+- 成本优化（减少无效训练时长）
 
 ## Out Of Scope
 
 - 不修改 Kokoro 模型架构
 - 不处理数据集采集
+- 不做推理侧优化
 
 ## Constraints
 
 - 先读 `AGENTS.md` 和 `PROJECT.md` 再动手
-- 训练代码路径：**由 Human 开始任务时补充**
+- 在云系统上搜索训练代码（不要凭空假设路径）
 - 超参数校验由 DeepSeek V4 并行独立完成，不共享结论
 - 结论写入 `plan.md`，风险写入 `risks.md`
