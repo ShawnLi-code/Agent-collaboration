@@ -22,19 +22,21 @@ async def health():
     return {"status": "ok", "device": str(DEVICE), "model": PRESET["name"]}
 ```
 
-### 核心配置（`api_tts.py` 预设参数，未变更）
+### 核心配置（`api_tts.py` 预设参数）
 
 ```python
 PRESET = {
-    "name": "epoch53_scale1.5_seed9999",
+    "name": "epoch53_scale1.0_seed20260626",
     "ckpt": "logs/C_diff_own_correct/epoch_2nd_00053.pth",
     "config": "logs/C_diff_own_correct/config_C_diff_own_correct.yml",
-    "embedding_scale": 1.5,     # scale=1.5
-    "seed": 9999,                # seed=9999
+    "embedding_scale": 1.0,     # scale=1.0（与长文本对比原始参数一致）
+    "seed": 20260626,            # seed=20260626（文本1 seed）
     "speed": 1.0,
     "diffusion_steps": 10,
 }
 ```
+
+> **变更记录：** 初始预设为 `scale=1.5, seed=9999`。后根据用户反馈，对比确认原始长文本对比使用的参数为 `scale=1.0, seed=20260626~20260630`，于 2026-06-29 将默认值改为 `scale=1.0, seed=20260626`。
 
 ### 关键推理管线（`api_tts.py:97-159`）
 
@@ -211,6 +213,8 @@ curl -X POST http://127.0.0.1:8123/synthesize \
 | `GET /preset` | ✅ 200 | 预设参数正确：scale=1.5, seed=9999, device=cuda |
 | `POST /synthesize` 通过 nginx 代理 (6006) | ✅ 200 | 2.93s 音频, 140KB, 代理正常工作 |
 | `POST /synthesize` 短文本 | ✅ 200 | 3.48s 音频, 166KB, 24000Hz mono PCM16 |
+| 原始参数复现对比（scale=1.0, seed=20260626~20260628） | ✅ 完全一致 | 3个音频时长/峰值/文件大小与`03_新版53轮_原生扩散`完全相同 |
+| 修改默认预设后验证 | ✅ 200 | 新默认值 scale=1.0, seed=20260626 生效 |
 | `GET /synthesize` URL编码中文 | ✅ 200 | 2.72s 音频, 130KB |
 | `POST /synthesize` 自定义参数 | ✅ 200 | 2.33s 音频, 111KB, seed=1234, scale=2.0 |
 | `POST /synthesize` 空文本 | ✅ 400 | `{"detail":"文本不能为空"}` |
