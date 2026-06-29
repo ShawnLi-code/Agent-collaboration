@@ -58,6 +58,15 @@ PRESET = {
 | GET | `/preset` | 查看当前预设参数 |
 | GET | `/docs` | FastAPI Swagger 文档 |
 
+### 请求参数（POST /synthesize）
+
+| 参数 | 类型 | 必填 | 说明 | 默认值 |
+|------|------|------|------|--------|
+| `text` | string | **是** | 要合成的文本，最长500字 | - |
+| `seed` | int | 否 | 随机种子 | `20260626` |
+| `embedding_scale` | float | 否 | 风格强度（Classifier-Free Guidance） | `1.0` |
+| `speed` | float | 否 | 语速倍率（>1加快，<1放慢） | `1.0` |
+
 ### 输入验证
 
 - 空文本 → `400 {"detail":"文本不能为空"}`
@@ -189,9 +198,22 @@ curl -o output.wav "http://127.0.0.1:8123/synthesize?text=%E6%82%A8%E5%A5%BD%EF%
 ### 自定义参数
 
 ```bash
+# 自定义 seed 和 scale
 curl -X POST http://127.0.0.1:8123/synthesize \
   -H "Content-Type: application/json" \
   -d '{"text":"测试自定义参数。","seed":1234,"embedding_scale":2.0}' \
+  -o output.wav
+
+# 调整语速（加快到1.2倍）
+curl -X POST http://127.0.0.1:8123/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"您好，欢迎致电客服中心。","speed":1.2}' \
+  -o output.wav
+
+# 放慢到0.9倍
+curl -X POST http://127.0.0.1:8123/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"您好，欢迎致电客服中心。","speed":0.9}' \
   -o output.wav
 ```
 
@@ -200,9 +222,10 @@ curl -X POST http://127.0.0.1:8123/synthesize \
 - **成功**：`audio/wav` 二进制（PCM 16-bit, mono, 24000 Hz）
 - **失败**：`application/json`（HTTP 400/500）
 - **响应头**：
-  - `X-Preset`: `epoch53_scale1.5_seed9999`
+  - `X-Preset`: 当前预设名称
   - `X-Seed`: 使用的种子值
   - `X-Scale`: 使用的 scale 值
+  - `X-Speed`: 使用的语速值
   - `X-Duration-S`: 音频时长（秒）
 
 ## 测试结果
@@ -215,6 +238,8 @@ curl -X POST http://127.0.0.1:8123/synthesize \
 | `POST /synthesize` 短文本 | ✅ 200 | 3.48s 音频, 166KB, 24000Hz mono PCM16 |
 | 原始参数复现对比（scale=1.0, seed=20260626~20260628） | ✅ 完全一致 | 3个音频时长/峰值/文件大小与`03_新版53轮_原生扩散`完全相同 |
 | 修改默认预设后验证 | ✅ 200 | 新默认值 scale=1.0, seed=20260626 生效 |
+| `speed` 语速参数测试 (1.2) | ✅ 200 | 4.40s→3.92s，加快约12% |
+| `speed` 语速参数测试 (0.9) | ✅ 200 | 4.40s→4.72s，放慢约7% |
 | `GET /synthesize` URL编码中文 | ✅ 200 | 2.72s 音频, 130KB |
 | `POST /synthesize` 自定义参数 | ✅ 200 | 2.33s 音频, 111KB, seed=1234, scale=2.0 |
 | `POST /synthesize` 空文本 | ✅ 400 | `{"detail":"文本不能为空"}` |
